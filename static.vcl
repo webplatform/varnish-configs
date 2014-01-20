@@ -28,8 +28,6 @@ sub vcl_recv {
     # General purpose storage (fallback):
     # - wpd
 
-
-
     if (req.url ~ "^/t/(thumb|temp|public)/") {
         # /test/ wiki assets
         set req.url = regsub( req.url, "^/t/images/(thumb|temp|public)/(.+)$",
@@ -41,13 +39,13 @@ sub vcl_recv {
                               "/swift/v1/wpwiki-local-\1/\2");
 
     } elseif (req.url ~ "^/wpd-blog/") {
-        set req.url = regsub( req.url, "^/wpd-blog/(.+)$",
-                              "/swift/v1/wpd-blog/\2");
+        set req.url = regsub( req.url, "^(.+)$",
+                              "/swift/v1\1");
 
     } else {
         # Bucket to store all the rest
         set req.url = regsub( req.url, "^(.+)$",
-                              "/wpd\1");
+                              "/swift/v1\1");
     }
 
     # normalize Accept-Encoding to reduce vary
@@ -105,7 +103,7 @@ sub vcl_fetch {
     return (deliver);
   }
 
-  # Gzip gzip
+  # Gzip
   if (beresp.status == 200 && (beresp.http.content-type ~ "^(text/html|application/x-javascript|text/css|application/javascript|text/javascript)\s*($|;)" || req.url ~ "\.(js|css|html)($|\?)" ) ) {
 
     # always set vary to make sure uncompressed versions dont always win
