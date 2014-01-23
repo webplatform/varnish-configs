@@ -4,12 +4,6 @@ sub vcl_recv {
 
 #FASTLY recv
 
-
-    if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-      return(pass);
-    }
-
-
     # Buckets to map:
     #
     # MW site at docs.webplatform.org/test/:
@@ -72,7 +66,12 @@ sub vcl_recv {
     unset req.http.X-Forwarded-For;
     # /As suggested...
 
-    return(lookup);
+  ## Fastly BOILERPLATE ========
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+    return(pass);
+  }
+  return(lookup);
+  ## /Fastly BOILERPLATE =======
 }
 
 sub vcl_fetch {
@@ -131,25 +130,38 @@ sub vcl_fetch {
 sub vcl_hit {
 #FASTLY hit
 
-
+  ## Fastly BOILERPLATE ========
   if (!obj.cacheable) {
     return(pass);
   }
   return(deliver);
+  ## /Fastly BOILERPLATE =======
+
 }
 
 sub vcl_miss {
 #FASTLY miss
+
+  ## Fastly BOILERPLATE ========
   return(fetch);
+  ## /Fastly BOILERPLATE =======
 }
 
 sub vcl_deliver {
 #FASTLY deliver
 
+  # Debug, Advise backend
+  set resp.http.X-Backend-Key = req.backend;
+
   # Debug, what URL was requested
   set resp.http.X-Request-Url = req.url;
 
+  # Debug, change version string
+  set resp.http.X-Config-Serial = "2014012300";
+
+  ## Fastly BOILERPLATE ========
   return(deliver);
+  ## /Fastly BOILERPLATE =======
 }
 
 sub vcl_error {
