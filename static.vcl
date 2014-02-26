@@ -9,6 +9,7 @@ sub vcl_recv {
     # MW site at docs.webplatform.org/test/:
     # - wptestwiki-local-deleted
     # - wptestwiki-local-public
+    # - wptestwiki-local-thumb
     #
     # MW site at docs.webplatform.org/wiki/:
     # - wpwiki-local-deleted
@@ -22,9 +23,9 @@ sub vcl_recv {
     # General purpose storage (fallback):
     # - wpd
 
-    if (req.url ~ "^/t/(thumb|temp|public)/") {
+    if (req.url ~ "^/t/(thumb|deleted|public)/") {
         # /test/ wiki assets
-        set req.url = regsub( req.url, "^/t/images/(thumb|temp|public)/(.+)$",
+        set req.url = regsub( req.url, "^/t/(thumb|deleted|public)/(.+)$",
                                "/swift/v1/wptestwiki-local-\1/\2");
 
     } elseif (req.url ~ "^/w/(thumb|temp|public)/") {

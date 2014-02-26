@@ -3,11 +3,11 @@
 # And load balance based on hash and availability
 director iphashed client {
   {
-    .backend = F_app1;
+    .backend = F_app4;
     .weight = 1;
   }
   {
-    .backend = F_app2;
+    .backend = F_app6;
     .weight = 1;
   }
   {
@@ -33,7 +33,7 @@ sub vcl_deliver {
   set resp.http.X-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014012200";
+  set resp.http.X-Config-Serial = "2014022500";
 
   return(deliver);
 }
