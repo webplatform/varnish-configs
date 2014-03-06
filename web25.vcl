@@ -1,4 +1,3 @@
-
     # Doc: Called at the beginning of a request, after the complete request 
     #      has been received and parsed. Its purpose is to 
     #      decide whether or not to serve the request, how to 
@@ -24,15 +23,16 @@ sub vcl_recv {
       # Avoid a request pileup by serving stale content if required.
       set req.grace = 15s;
   }
-
-  # Strip Cookies and Authentication headers from urls whose output will
-  #   never be influenced by them.
-  #   source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
-  if (req.url ~ "^/(wp-content|wp-includes)") {
-      remove req.http.Authenticate;
-      remove req.http.Authorization;
-      remove req.http.Cookie;
+  
+  # Set the URI of your system directory
+  if (req.url ~ '^/backoffice' ||
+      req.url ~ 'ACT=' ||
+      req.request == 'POST')
+  {
+      return(lookup); # We want default behavior
   }
+  
+  unset req.http.Cookie;
 
   ## Fastly BOILERPLATE ========
   #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
