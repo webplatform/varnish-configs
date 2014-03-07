@@ -1,4 +1,15 @@
-    # Doc: Called at the beginning of a request, after the complete request 
+
+#
+# Fastly (Varnish) configuration for www.webat25.org
+#
+# Assuming it is using Varnish 2.1.5 syntax
+#
+# Ref: 
+#  - https://www.varnish-cache.org/docs/2.1/tutorial/vcl.html
+#  - http://ellislab.com/blog/entry/making-sites-fly-with-varnish
+#
+
+# Doc: Called at the beginning of a request, after the complete request 
     #      has been received and parsed. Its purpose is to 
     #      decide whether or not to serve the request, how to 
     #      do it, and, if applicable, which backend to use.
@@ -23,24 +34,36 @@ sub vcl_recv {
       # Avoid a request pileup by serving stale content if required.
       set req.grace = 15s;
   }
-  
-  # Set the URI of your system directory
-  if (req.url ~ '^/backoffice' ||
-      req.url ~ 'ACT=' ||
-      req.request == 'POST')
-  {
-      return(lookup); # We want default behavior
-  }
-  
-  unset req.http.Cookie;
+
+  # Do not continue if we are in the backend mode
+  #   source: http://ellislab.com/blog/entry/making-sites-fly-with-varnish
+  #
+  # THIS HAS TO BE TESTED
+  #if (req.url ~ "^/system/" ||
+  #    req.url ~ "ACT=" ||
+  #    req.request == "POST")
+  #{
+  #    return (pass);
+  #} 
+  #
+  # Please, do not set¸
+  #   cookies everywhere :`(
+  #
+  # THIS HAS TO BE TESTED
+  #remove req.http.Cookie;
 
   ## Fastly BOILERPLATE ========
   #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
-  #  #       ref: http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
-  #  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-  #    return(pass);
-  #  }
-    return(lookup);  # Default outcome, keep at the end
+  #  #       BUT ONLY with Varnish >= 3 ... not our case with Fastly at the moment
+  #  #
+  #  #       Ref:
+  #  #         - http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
+  #  #         - http://docs.fastly.com/guides/22958207/27123847
+  #  #
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+    return(pass);
+  }
+  return(lookup);  # Default outcome, keep at the end
   ## /Fastly BOILERPLATE ========
 }
 
@@ -111,7 +134,7 @@ sub vcl_deliver {
   set resp.http.X-Debug-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014030600";
+  set resp.http.X-Config-Serial = "2014030601";
 
   ## Fastly BOILERPLATE ========
   return(deliver);  # Default outcome, keep at the end
