@@ -2,16 +2,20 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
+# Service: web25, v #26
+#
 # Assuming it is using Varnish 2.1.5 syntax
 #
-# Ref: 
+# Ref:
 #  - https://www.varnish-cache.org/docs/2.1/tutorial/vcl.html
+#  - https://www.varnish-software.com/static/book/VCL_functions.html
+#  - http://docs.fastly.com/guides/22958207/27123847
 #  - http://ellislab.com/blog/entry/making-sites-fly-with-varnish
 #
 
-# Doc: Called at the beginning of a request, after the complete request 
-    #      has been received and parsed. Its purpose is to 
-    #      decide whether or not to serve the request, how to 
+    # Doc: Called at the beginning of a request, after the complete request
+    #      has been received and parsed. Its purpose is to
+    #      decide whether or not to serve the request, how to
     #      do it, and, if applicable, which backend to use.
 sub vcl_recv {
 #FASTLY recv
@@ -38,16 +42,14 @@ sub vcl_recv {
   # Do not continue if we are in the backend mode
   #   source: http://ellislab.com/blog/entry/making-sites-fly-with-varnish
   #
-  # THIS HAS TO BE TESTED
-  #if (req.url ~ "^/system/" ||
-  #    req.url ~ "ACT=" ||
-  #    req.request == "POST")
-  #{
-  #    return (pass);
-  #} 
-  #
-  # Please, do not set¸
-  #   cookies everywhere :`(
+  if (req.url ~ "^/system" ||
+      req.url ~ "^/backoffice" ||
+      req.url ~ "ACT=")
+  {
+      return (pass);
+  }
+
+  # Please, do not set cookies everywhere
   #
   # THIS HAS TO BE TESTED
   #remove req.http.Cookie;
@@ -58,13 +60,15 @@ sub vcl_recv {
   #  #
   #  #       Ref:
   #  #         - http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
-  #  #         - http://docs.fastly.com/guides/22958207/27123847
   #  #
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
     return(pass);
   }
-  return(lookup);  # Default outcome, keep at the end
+  #return(lookup);  # Default outcome, keep at the end
   ## /Fastly BOILERPLATE ========
+
+  # REMOVE ME ON TUESDAY!!
+  return (pass);
 }
 
 
@@ -123,7 +127,8 @@ sub vcl_fetch {
 }
 
 
-    # Doc: Called before a cached object is delivered to the client
+    # Doc: Called before a cached object is
+    #      delivered to the client
 sub vcl_deliver {
 #FASTLY deliver
 
@@ -134,7 +139,7 @@ sub vcl_deliver {
   set resp.http.X-Debug-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014030601";
+  set resp.http.X-Config-Serial = "2014030902";
 
   ## Fastly BOILERPLATE ========
   return(deliver);  # Default outcome, keep at the end
@@ -155,20 +160,47 @@ sub vcl_hit {
 }
 
 
-    # Doc: Called after a cache lookup if the 
-    #      requested document was not found in 
-    #      the cache. Its purpose is to decide 
-    #      whether or not to attempt to retrieve 
-    #      the document from the backend, and  
+    # Doc: Called after a cache lookup if the
+    #      requested document was not found in
+    #      the cache. Its purpose is to decide
+    #      whether or not to attempt to retrieve
+    #      the document from the backend, and
     #      which backend to use.
 sub vcl_miss {
 #FASTLY miss
 
   # Some backend calls can be longer than
   # page reads :(
-  if (req.url ~ "^/backoffice") {
-    set bereq.first_byte_timeout = 5m;
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+    set bereq.first_byte_timeout = 3m;
     set bereq.between_bytes_timeout = 3m;
-  } 
+  }
   return(fetch); # Default outcome, keep at the end
+}
+
+
+    # Doc: Called upon entering pass mode. In
+    #      this mode, the request is passed on
+    #      to the backend, and the backend’s
+    #      response is passed on to the client,
+    #      but is not entered into the cache.
+    #      Subsequent requests sub‐ mitted over
+    #      the same client connection are handled
+    #      normally.
+sub vcl_pass {
+#FASTLY pass
+
+  #
+  # Some backend calls can be longer than
+  # page reads
+  #
+  # TODO: see to use only here and not only in miss instead
+  #
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+    set bereq.first_byte_timeout = 3m;
+    set bereq.between_bytes_timeout = 3m;
+    set bereq.connect_timeout = 3m;
+  }
+
+  return (pass);  # Default outcome, keep at the end
 }

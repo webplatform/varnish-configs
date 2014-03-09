@@ -1,11 +1,25 @@
 
-    # Doc: Called at the beginning of a request, after the complete request 
-    #      has been received and parsed. Its purpose is to 
-    #      decide whether or not to serve the request, how to 
+#
+# Fastly (Varnish) configuration for www.webat25.org
+#
+# Service: web25, v #28
+#
+# Assuming it is using Varnish 2.1.5 syntax
+#
+# Ref:
+#  - https://www.varnish-cache.org/docs/2.1/tutorial/vcl.html
+#  - https://www.varnish-software.com/static/book/VCL_functions.html
+#  - http://docs.fastly.com/guides/22958207/27123847
+#
+
+    # Doc: Called at the beginning of a request, after the complete request
+    #      has been received and parsed. Its purpose is to
+    #      decide whether or not to serve the request, how to
     #      do it, and, if applicable, which backend to use.
 sub vcl_recv {
 #FASTLY recv
 
+  #
   # Handle grace periods for where we will serve a stale response
   #     source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
   if (!req.backend.healthy) {
@@ -37,10 +51,10 @@ sub vcl_recv {
   ## Fastly BOILERPLATE ========
   #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
   #  #       ref: http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
-  #  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-  #    return(pass);
-  #  }
-    return(lookup);  # Default outcome, keep at the end
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+      return(pass);
+  }
+  return(lookup);  # Default outcome, keep at the end
   ## /Fastly BOILERPLATE ========
 }
 
@@ -111,7 +125,7 @@ sub vcl_deliver {
   set resp.http.X-Debug-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014030600";
+  set resp.http.X-Config-Serial = "2014030900";
 
   ## Fastly BOILERPLATE ========
   return(deliver);  # Default outcome, keep at the end
@@ -125,27 +139,57 @@ sub vcl_hit {
 
   ## Fastly BOILERPLATE ========
   if (!obj.cacheable) {
-    return(pass); # Do NOT cache :(
+    return(pass);
   }
   return(deliver);  # Default outcome, keep at the end
   ## /Fastly BOILERPLATE =======
 }
 
 
-    # Doc: Called after a cache lookup if the 
-    #      requested document was not found in 
-    #      the cache. Its purpose is to decide 
-    #      whether or not to attempt to retrieve 
-    #      the document from the backend, and  
+    # Doc: Called after a cache lookup if the
+    #      requested document was not found in
+    #      the cache. Its purpose is to decide
+    #      whether or not to attempt to retrieve
+    #      the document from the backend, and
     #      which backend to use.
 sub vcl_miss {
 #FASTLY miss
 
+  #
   # Some backend calls can be longer than
-  # page reads :(
-  if (req.url ~ "^/wp-admin") {
+  # page reads
+  #
+  if  (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
     set bereq.first_byte_timeout = 5m;
     set bereq.between_bytes_timeout = 3m;
-  } 
+  }
   return(fetch); # Default outcome, keep at the end
+}
+
+
+
+    # Doc: Called upon entering pass mode. In
+    #      this mode, the request is passed on
+    #      to the backend, and the backend’s
+    #      response is passed on to the client,
+    #      but is not entered into the cache.
+    #      Subsequent requests sub‐ mitted over
+    #      the same client connection are handled
+    #      normally.
+sub vcl_pass {
+#FASTLY pass
+
+  #
+  # Some backend calls can be longer than
+  # page reads
+  #
+  # TODO: see to use only here and not only in miss instead
+  #
+  if  (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+    set bereq.first_byte_timeout = 3m;
+    set bereq.between_bytes_timeout = 3m;
+    set bereq.connect_timeout = 3m;
+  }
+
+  return (pass);  # Default outcome, keep at the end
 }
