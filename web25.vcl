@@ -2,7 +2,14 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
-# Service: web25, v #26
+# Service: web25, v #27
+#
+# Backend configs:
+#   - Max connections: 700
+#   - Error treshold: 5
+#   - Connection (ms): 60000
+#   - First byte (ms): 75000
+#   - Between bytes (ms): 30000
 #
 # Assuming it is using Varnish 2.1.5 syntax
 #
@@ -10,6 +17,7 @@
 #  - https://www.varnish-cache.org/docs/2.1/tutorial/vcl.html
 #  - https://www.varnish-software.com/static/book/VCL_functions.html
 #  - http://docs.fastly.com/guides/22958207/27123847
+#  - http://docs.fastly.com/guides/22958207/23206371
 #  - http://ellislab.com/blog/entry/making-sites-fly-with-varnish
 #
 
@@ -174,33 +182,7 @@ sub vcl_miss {
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
     set bereq.first_byte_timeout = 3m;
     set bereq.between_bytes_timeout = 3m;
-  }
-  return(fetch); # Default outcome, keep at the end
-}
-
-
-    # Doc: Called upon entering pass mode. In
-    #      this mode, the request is passed on
-    #      to the backend, and the backend’s
-    #      response is passed on to the client,
-    #      but is not entered into the cache.
-    #      Subsequent requests sub‐ mitted over
-    #      the same client connection are handled
-    #      normally.
-sub vcl_pass {
-#FASTLY pass
-
-  #
-  # Some backend calls can be longer than
-  # page reads
-  #
-  # TODO: see to use only here and not only in miss instead
-  #
-  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-    set bereq.first_byte_timeout = 3m;
-    set bereq.between_bytes_timeout = 3m;
     set bereq.connect_timeout = 3m;
   }
-
-  return (pass);  # Default outcome, keep at the end
+  return(fetch); # Default outcome, keep at the end
 }
