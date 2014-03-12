@@ -2,12 +2,12 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
-# Service: web25, v #27
+# Service: web25, v #29
 #
 # Backend configs:
 #   - Max connections: 700
 #   - Error treshold: 5
-#   - Connection (ms): 60000
+#   - Connection (ms): 75000
 #   - First byte (ms): 75000
 #   - Between bytes (ms): 30000
 #
@@ -60,7 +60,7 @@ sub vcl_recv {
   # Please, do not set cookies everywhere
   #
   # THIS HAS TO BE TESTED
-  #remove req.http.Cookie;
+  remove req.http.Cookie;
 
   ## Fastly BOILERPLATE ========
   #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
@@ -72,11 +72,8 @@ sub vcl_recv {
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
     return(pass);
   }
-  #return(lookup);  # Default outcome, keep at the end
+  return(lookup);  # Default outcome, keep at the end
   ## /Fastly BOILERPLATE ========
-
-  # REMOVE ME ON TUESDAY!!
-  return (pass);
 }
 
 
@@ -147,7 +144,7 @@ sub vcl_deliver {
   set resp.http.X-Debug-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014030902";
+  set resp.http.X-Config-Serial = "2014031100";
 
   ## Fastly BOILERPLATE ========
   return(deliver);  # Default outcome, keep at the end
