@@ -2,11 +2,11 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
-# Service: web25, v #29
+# Service: web25, v #35
 #
 # Backend configs:
-#   - Max connections: 700
-#   - Error treshold: 5
+#   - Max connections: 800
+#   - Error treshold: 2
 #   - Connection (ms): 75000
 #   - First byte (ms): 75000
 #   - Between bytes (ms): 30000
@@ -61,6 +61,7 @@ sub vcl_recv {
   #
   # THIS HAS TO BE TESTED
   remove req.http.Cookie;
+  unset req.http.Cookie;
 
   ## Fastly BOILERPLATE ========
   #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
@@ -98,6 +99,10 @@ sub vcl_fetch {
     if (req.http.Accept-Encoding == "gzip") {
       set beresp.gzip = true;
     }
+  }
+
+  if (req.request != "POST") {
+     unset beresp.http.set-cookie;
   }
 
   ## Fastly BOILERPLATE ========
@@ -144,7 +149,7 @@ sub vcl_deliver {
   set resp.http.X-Debug-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014031100";
+  set resp.http.X-Config-Serial = "2014031201";
 
   ## Fastly BOILERPLATE ========
   return(deliver);  # Default outcome, keep at the end
