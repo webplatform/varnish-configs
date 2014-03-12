@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
-# Service: web25, v #35
+# Service: web25, v #36
 #
 # Backend configs:
 #   - Max connections: 800
@@ -103,6 +103,7 @@ sub vcl_fetch {
 
   if (req.request != "POST") {
      unset beresp.http.set-cookie;
+     set beresp.ttl = 1m;
   }
 
   ## Fastly BOILERPLATE ========
