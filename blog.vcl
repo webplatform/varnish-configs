@@ -1,4 +1,3 @@
-
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
@@ -18,6 +17,7 @@
 #  - https://www.varnish-software.com/static/book/VCL_functions.html
 #  - http://docs.fastly.com/guides/22958207/27123847
 #  - http://docs.fastly.com/guides/22958207/23206371
+#  - http://blog.bigdinosaur.org/adventures-in-varnish/
 #
 
     # Doc: Called at the beginning of a request, after the complete request
