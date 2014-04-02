@@ -1,3 +1,9 @@
+#
+# References:
+#  * http://wikia.googlecode.com/svn/utils/varnishhtcpd/mediawiki.vcl
+#  * https://git.wikimedia.org/git/operations/puppet.git in templates/varnish we can see some Varnish
+#
+
 sub vcl_recv {
 #FASTLY recv
   set client.identity = req.http.Fastly-Client-IP;
