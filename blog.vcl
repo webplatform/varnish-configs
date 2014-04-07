@@ -1,7 +1,8 @@
+
 #
-# Fastly (Varnish) configuration for www.webat25.org
+# Fastly (Varnish) configuration for blog.webplatform.org
 #
-# Service: blog, v #29
+# Service: blog, v #35 (see 30)
 #
 # Backend configs:
 #   - Max connections: 700
@@ -18,6 +19,7 @@
 #  - http://docs.fastly.com/guides/22958207/27123847
 #  - http://docs.fastly.com/guides/22958207/23206371
 #  - http://blog.bigdinosaur.org/adventures-in-varnish/
+#  - https://www.varnish-cache.org/docs/2.1/tutorial/increasing_your_hitrate.html
 #
 
     # Doc: Called at the beginning of a request, after the complete request
@@ -26,6 +28,8 @@
     #      do it, and, if applicable, which backend to use.
 sub vcl_recv {
 #FASTLY recv
+
+  set client.identity = req.http.Fastly-Client-IP;
 
   #
   # Handle grace periods for where we will serve a stale response
@@ -47,13 +51,22 @@ sub vcl_recv {
       set req.grace = 15s;
   }
 
-  # Strip Cookies and Authentication headers from urls whose output will
-  #   never be influenced by them.
-  #   source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
-  if (req.url ~ "^/(wp-content|wp-includes)") {
-      remove req.http.Authenticate;
-      remove req.http.Authorization;
-      remove req.http.Cookie;
+  # Remove ALL cookies to the backend
+  #   except the ones WordPress cares about
+  if(req.url ~ "wp-(login|admin)" || req.url ~ "preview=true" || req.url ~ "xmlrpc.php") {
+    # Do not tamper with WordPress cookies here
+  } else {
+    if (req.http.Cookie) {
+      set req.http.Cookie = ";" req.http.Cookie;
+      set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(wordpress_|wp-settings-)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
+      set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
+
+      if (req.http.Cookie == "") {
+          remove req.http.Cookie;
+      }
+    }
   }
 
   ## Fastly BOILERPLATE ========
@@ -74,9 +87,17 @@ sub vcl_fetch {
   # Set the maximum grace period on an object
   set beresp.grace = 24h;
 
+  if ( (!(req.url ~ "(wp-(login|admin)|login)")) || (req.request == "GET") ) {
+    unset beresp.http.set-cookie;
+  }
+
+  # Debug notes
+  if(!beresp.http.X-Cache-Note) {
+    set beresp.http.X-Cache-Note = "Debugging notes: ";
+  }
+
   # Gzip
   if (beresp.status == 200 && (beresp.http.content-type ~ "^(text/html|application/x-javascript|text/css|application/javascript|text/javascript)\s*($|;)" || req.url ~ "\.(js|css|html)($|\?)" ) ) {
-
     # always set vary to make sure uncompressed versions dont always win
     if (!beresp.http.Vary ~ "Accept-Encoding") {
       if (beresp.http.Vary) {
@@ -90,6 +111,16 @@ sub vcl_fetch {
     }
   }
 
+  # Enforce static asset Cache
+  if (
+    req.url ~ ".*\.(png|jpg|jpeg|gif|svg|css).*"
+  ) {
+      set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Forced static asset cache";
+      set beresp.ttl = 86400s;
+      set beresp.grace = 864000s;
+      return(deliver);
+  }
+
   ## Fastly BOILERPLATE ========
   if ((beresp.status == 500 || beresp.status == 503) && req.restarts < 1 && (req.request == "GET" || req.request == "HEAD")) {
     restart;
@@ -98,23 +129,28 @@ sub vcl_fetch {
     set beresp.http.Fastly-Restarts = req.restarts;
   }
   if (beresp.http.Set-Cookie) {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has Set-Cookie";
     set req.http.Fastly-Cachetype = "SETCOOKIE";
     return (pass);
   }
   if (beresp.http.Cache-Control ~ "private") {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Cache-Control private";
     set req.http.Fastly-Cachetype = "PRIVATE";
     return (pass);
   }
   if (beresp.status == 500 || beresp.status == 503) {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Error document";
     set req.http.Fastly-Cachetype = "ERROR";
     set beresp.ttl = 1s;
     set beresp.grace = 5s;
     return (deliver);
   }
   if (beresp.http.Expires || beresp.http.Surrogate-Control ~ "max-age" || beresp.http.Cache-Control ~"(s-maxage|max-age)") {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has either max-age,Expires,Cache-control";
     # keep the ttl here
   } else {
     # apply the default ttl
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Had no max-age,expires,cache-control; setting default ttl";
     set beresp.ttl = 3600s;
   }
   return(deliver); # Default outcome, keep at the end
@@ -122,55 +158,34 @@ sub vcl_fetch {
 }
 
 
+
     # Doc: Called before a cached object is delivered to the client
 sub vcl_deliver {
 #FASTLY deliver
 
-  # Debug, Advise backend
-  set resp.http.X-Debug-Backend-Key = req.backend;
+  # Always send this instead of using meta tags in markup
+  if (resp.http.Content-Type ~ "html") {
+    set resp.http.X-UA-Compatible = "IE=edge,chrome=1";
+  }
 
-  # Debug, what URL was requested
-  set resp.http.X-Debug-Request-Url = req.url;
+  # Debug, Advise backend
+  set resp.http.X-Backend-Key = req.backend;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014030900";
+  set resp.http.X-Config-Serial = "2014040700";
+
+  if (!req.http.Fastly-Debug) {
+      remove resp.http.X-Cache-Note;
+      remove resp.http.X-Backend-Key;
+      remove resp.http.Server;
+      remove resp.http.Via;
+      remove resp.http.X-Served-By;
+      remove resp.http.X-Cache;
+      remove resp.http.X-Cache-Hits;
+      remove resp.http.X-Timer;
+  }
 
   ## Fastly BOILERPLATE ========
-  return(deliver);  # Default outcome, keep at the end
+  return(deliver);
   ## /Fastly BOILERPLATE =======
-}
-
-
-    # Doc: Called after a cache lookup if the requested document was found in the cache.
-sub vcl_hit {
-#FASTLY hit
-
-  ## Fastly BOILERPLATE ========
-  if (!obj.cacheable) {
-    return(pass);
-  }
-  return(deliver);  # Default outcome, keep at the end
-  ## /Fastly BOILERPLATE =======
-}
-
-
-    # Doc: Called after a cache lookup if the
-    #      requested document was not found in
-    #      the cache. Its purpose is to decide
-    #      whether or not to attempt to retrieve
-    #      the document from the backend, and
-    #      which backend to use.
-sub vcl_miss {
-#FASTLY miss
-
-  #
-  # Some backend calls can be longer than
-  # page reads
-  #
-  if  (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-    set bereq.first_byte_timeout = 5m;
-    set bereq.between_bytes_timeout = 3m;
-    set bereq.connect_timeout = 3m;
-  }
-  return(fetch); # Default outcome, keep at the end
 }

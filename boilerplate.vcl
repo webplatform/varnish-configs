@@ -1,15 +1,33 @@
+
+
 #
-# Blank configuration taken from Fastly documentation:
+# Fastly (Varnish) configuration for ...
 #
-# "How do I mix and match Fastly VCL with custom VCL?"
+# Service: ..., v #...
 #
-# sources:
-#   - http://docs.fastly.com/guides/21835572/23206371
-#   - https://fastly.zendesk.com/entries/23206371
+# Backend configs:
+#   - Max connections: 700
+#   - Error treshold: 5
+#   - Connection (ms): 60000
+#   - First byte (ms): 60000
+#   - Between bytes (ms): 30000
+#
+# Assuming it is using Varnish 2.1.5 syntax
+#
+# Ref:
+#  - https://www.varnish-cache.org/docs/2.1/tutorial/vcl.html
+#  - https://www.varnish-software.com/static/book/VCL_functions.html
+#  - http://docs.fastly.com/guides/22958207/27123847
+#  - http://docs.fastly.com/guides/22958207/23206371
+#  - https://www.varnish-cache.org/docs/2.1/tutorial/increasing_your_hitrate.html
+#  - https://fastly.zendesk.com/entries/23206371
 #
 
 
-
+    # Doc: Called at the beginning of a request, after the complete request
+    #      has been received and parsed. Its purpose is to
+    #      decide whether or not to serve the request, how to
+    #      do it, and, if applicable, which backend to use.
 sub vcl_recv {
 #FASTLY recv
 
@@ -23,6 +41,7 @@ sub vcl_recv {
 
 
 
+    # Doc: Called after a document has been successfully retrieved from the backend
 sub vcl_fetch {
 #FASTLY fetch
 
@@ -59,6 +78,7 @@ sub vcl_fetch {
 
 
 
+    # Doc: Called after a cache lookup if the requested document was found in the cache.
 sub vcl_hit {
 #FASTLY hit
 
