@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #35 (fork from 23, see also 27, 34)
+# Service: docs, v #36 (fork from 23, see also 27, 34, 35)
 #
 # Backend configs:
 #   - Max connections: 600
@@ -61,7 +61,7 @@ sub vcl_recv {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiforceHTTPS|wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|dismissSiteNotice)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiforceHTTPS|wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|dismissSiteNotice|wptestwikiUserID|wptestwikiUserName|wptestwiki_session)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
@@ -85,8 +85,6 @@ sub vcl_recv {
   }
 
   ## Fastly BOILERPLATE ========
-  #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
-  #  #       ref: http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
       return(pass);
   }
@@ -189,7 +187,7 @@ sub vcl_deliver {
   set resp.http.X-Backend-Key = req.backend;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014040700";
+  set resp.http.X-Config-Serial = "2014041500";
 
   if (!req.http.Fastly-Debug) {
       remove resp.http.X-Cache-Note;
