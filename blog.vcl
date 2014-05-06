@@ -70,12 +70,10 @@ sub vcl_recv {
   }
 
   ## Fastly BOILERPLATE ========
-  #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
-  #  #       ref: http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
       return(pass);
   }
-  return(lookup);  # Default outcome, keep at the end
+  return(lookup);
   ## /Fastly BOILERPLATE ========
 }
 
@@ -158,8 +156,8 @@ sub vcl_fetch {
 }
 
 
-
-    # Doc: Called before a cached object is delivered to the client
+    # Doc: Called before a cached object is
+    #      delivered to the client
 sub vcl_deliver {
 #FASTLY deliver
 
@@ -170,11 +168,15 @@ sub vcl_deliver {
 
   # Debug, Advise backend
   set resp.http.X-Backend-Key = req.backend;
+  set resp.http.X-Request-Url = req.url;
 
   # Debug, change version string
   set resp.http.X-Config-Serial = "2014040700";
 
-  if (!req.http.Fastly-Debug) {
+  # The (!req.http.Fastly-FF) is to differentiate between
+  #   edge to the sheild nodes. Shield nodes has a Fastly-FF
+  #   header added internally.
+  if ((!req.http.Fastly-FF) && (!req.http.Fastly-Debug)) {
       remove resp.http.X-Cache-Note;
       remove resp.http.X-Backend-Key;
       remove resp.http.Server;
@@ -189,3 +191,7 @@ sub vcl_deliver {
   return(deliver);
   ## /Fastly BOILERPLATE =======
 }
+
+
+
+

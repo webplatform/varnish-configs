@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #36 (fork from 23, see also 27, 34, 35)
+# Service: docs, v #38 (fork from 23, see also 27, 34, 35, 36)
 #
 # Backend configs:
 #   - Max connections: 600
@@ -61,7 +61,7 @@ sub vcl_recv {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiforceHTTPS|wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|dismissSiteNotice|wptestwikiUserID|wptestwikiUserName|wptestwiki_session)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwiki2forceHTTPS|wpwikiforceHTTPS|wpwikiUserID|wpwiki2UserID|wpwiki_session|wpwiki2_session|wpwikiUserName|wpwiki2UserName|wpwikiToken|wpwiki2Token|wpwikiLoggedOut|wpwiki2LoggedOut|dismissSiteNotice|wptestwikiUserID|wptestwikiUserName|wptestwiki_session)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
@@ -127,7 +127,7 @@ sub vcl_fetch {
 
   # Enforce static asset Cache
   if (
-    req.url ~ "^/[t|w]/load\.php.*?\bonly=\b[styles|scripts].*" ||
+    req.url ~ "^/[t|w|u]/load\.php.*?\bonly=\b[styles|scripts].*" ||
     beresp.http.content-type ~ "^(text/css|image|application/javascript|text/javascript)\s*($|;)"
   ) {
       set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Forced static asset cache";
@@ -173,8 +173,8 @@ sub vcl_fetch {
 }
 
 
-
-    # Doc: Called before a cached object is delivered to the client
+    # Doc: Called before a cached object is
+    #      delivered to the client
 sub vcl_deliver {
 #FASTLY deliver
 
@@ -185,11 +185,15 @@ sub vcl_deliver {
 
   # Debug, Advise backend
   set resp.http.X-Backend-Key = req.backend;
+  set resp.http.X-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014041500";
+  set resp.http.X-Config-Serial = "2014050500";
 
-  if (!req.http.Fastly-Debug) {
+  # The (!req.http.Fastly-FF) is to differentiate between
+  #   edge to the sheild nodes. Shield nodes has a Fastly-FF
+  #   header added internally.
+  if ((!req.http.Fastly-FF) && (!req.http.Fastly-Debug)) {
       remove resp.http.X-Cache-Note;
       remove resp.http.X-Backend-Key;
       remove resp.http.Server;
@@ -204,3 +208,7 @@ sub vcl_deliver {
   return(deliver);
   ## /Fastly BOILERPLATE =======
 }
+
+
+
+

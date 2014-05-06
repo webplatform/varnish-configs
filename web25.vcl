@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for www.webat25.org
 #
-# Service: web25, v #37
+# Service: web25, v #42 (see 37-41)
 #
 # Backend configs:
 #   - Max connections: 800
@@ -58,22 +58,27 @@ sub vcl_recv {
   }
 
   # Please, do not set cookies everywhere
-  #
-  # THIS HAS TO BE TESTED
   remove req.http.Cookie;
   unset req.http.Cookie;
 
-  ## Fastly BOILERPLATE ========
-  #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
-  #  #       BUT ONLY with Varnish >= 3 ... not our case with Fastly at the moment
-  #  #
-  #  #       Ref:
-  #  #         - http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
-  #  #
-  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-    return(pass);
+  # normalize Accept-Encoding to reduce vary
+  if (req.http.Accept-Encoding) {
+    if (req.http.User-Agent ~ "MSIE 6") {
+      unset req.http.Accept-Encoding;
+    } elsif (req.http.Accept-Encoding ~ "gzip") {
+      set req.http.Accept-Encoding = "gzip";
+    } elsif (req.http.Accept-Encoding ~ "deflate") {
+      set req.http.Accept-Encoding = "deflate";
+    } else {
+      unset req.http.Accept-Encoding;
+    }
   }
-  return(lookup);  # Default outcome, keep at the end
+
+  ## Fastly BOILERPLATE ========
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+      return(pass);
+  }
+  return(lookup);
   ## /Fastly BOILERPLATE ========
 }
 
@@ -85,9 +90,13 @@ sub vcl_fetch {
   # Set the maximum grace period on an object
   set beresp.grace = 24h;
 
+  # Debug notes
+  if(!beresp.http.X-Cache-Note) {
+    set beresp.http.X-Cache-Note = "Debugging notes: ";
+  }
+
   # Gzip
   if (beresp.status == 200 && (beresp.http.content-type ~ "^(text/html|application/x-javascript|text/css|application/javascript|text/javascript)\s*($|;)" || req.url ~ "\.(js|css|html)($|\?)" ) ) {
-
     # always set vary to make sure uncompressed versions dont always win
     if (!beresp.http.Vary ~ "Accept-Encoding") {
       if (beresp.http.Vary) {
@@ -103,7 +112,18 @@ sub vcl_fetch {
 
   if (req.request != "POST") {
      unset beresp.http.set-cookie;
-     set beresp.ttl = 3600s;
+     set beresp.ttl = 86400s;
+  }
+
+  # Enforce static asset Cache
+  if (
+    ( req.url ~ "^/images/" || req.url ~ "^/assets/" || req.url ~ "^/made/" ) ||
+    beresp.http.content-type ~ "^(text/css|image|application/javascript|text/javascript)\s*($|;)"
+  ) {
+      set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Forced static asset cache";
+      set beresp.ttl = 86400s;
+      set beresp.grace = 864000s;
+      return(deliver);
   }
 
   ## Fastly BOILERPLATE ========
@@ -114,23 +134,28 @@ sub vcl_fetch {
     set beresp.http.Fastly-Restarts = req.restarts;
   }
   if (beresp.http.Set-Cookie) {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has Set-Cookie";
     set req.http.Fastly-Cachetype = "SETCOOKIE";
     return (pass);
   }
   if (beresp.http.Cache-Control ~ "private") {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Cache-Control private";
     set req.http.Fastly-Cachetype = "PRIVATE";
     return (pass);
   }
   if (beresp.status == 500 || beresp.status == 503) {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Error document";
     set req.http.Fastly-Cachetype = "ERROR";
     set beresp.ttl = 1s;
     set beresp.grace = 5s;
     return (deliver);
   }
   if (beresp.http.Expires || beresp.http.Surrogate-Control ~ "max-age" || beresp.http.Cache-Control ~"(s-maxage|max-age)") {
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has either max-age,Expires,Cache-control";
     # keep the ttl here
   } else {
     # apply the default ttl
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Had no max-age,expires,cache-control; setting default ttl";
     set beresp.ttl = 3600s;
   }
   return(deliver); # Default outcome, keep at the end
@@ -143,49 +168,34 @@ sub vcl_fetch {
 sub vcl_deliver {
 #FASTLY deliver
 
-  # Debug, Advise backend
-  set resp.http.X-Debug-Backend-Key = req.backend;
+  # Always send this instead of using meta tags in markup
+  if (resp.http.Content-Type ~ "html") {
+    set resp.http.X-UA-Compatible = "IE=edge,chrome=1";
+  }
 
-  # Debug, what URL was requested
-  set resp.http.X-Debug-Request-Url = req.url;
+  # Debug, Advise backend
+  set resp.http.X-Backend-Key = req.backend;
+  set resp.http.X-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014031201";
+  set resp.http.X-Config-Serial = "2014050100";
+
+  # The (!req.http.Fastly-FF) is to differentiate between
+  #   edge to the sheild nodes. Shield nodes has a Fastly-FF
+  #   header added internally.
+  if ((!req.http.Fastly-FF) && (!req.http.Fastly-Debug)) {
+      remove resp.http.X-Cache-Note;
+      remove resp.http.X-Backend-Key;
+      remove resp.http.X-Request-Url;
+      remove resp.http.Server;
+      remove resp.http.Via;
+      remove resp.http.X-Served-By;
+      remove resp.http.X-Cache;
+      remove resp.http.X-Cache-Hits;
+      remove resp.http.X-Timer;
+  }
 
   ## Fastly BOILERPLATE ========
-  return(deliver);  # Default outcome, keep at the end
+  return(deliver);
   ## /Fastly BOILERPLATE =======
-}
-
-
-    # Doc: Called after a cache lookup if the requested document was found in the cache.
-sub vcl_hit {
-#FASTLY hit
-
-  ## Fastly BOILERPLATE ========
-  if (!obj.cacheable) {
-    return(pass); # Do NOT cache :(
-  }
-  return(deliver);  # Default outcome, keep at the end
-  ## /Fastly BOILERPLATE =======
-}
-
-
-    # Doc: Called after a cache lookup if the
-    #      requested document was not found in
-    #      the cache. Its purpose is to decide
-    #      whether or not to attempt to retrieve
-    #      the document from the backend, and
-    #      which backend to use.
-sub vcl_miss {
-#FASTLY miss
-
-  # Some backend calls can be longer than
-  # page reads :(
-  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-    set bereq.first_byte_timeout = 3m;
-    set bereq.between_bytes_timeout = 3m;
-    set bereq.connect_timeout = 3m;
-  }
-  return(fetch); # Default outcome, keep at the end
 }
