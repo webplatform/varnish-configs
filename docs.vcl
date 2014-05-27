@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #38 (fork from 23, see also 27, 34, 35, 36)
+# Service: docs, v #40 (fork from 23, see also 27, 34, 35, 36, 38)
 #
 # Backend configs:
 #   - Max connections: 600
@@ -33,6 +33,10 @@ sub vcl_recv {
 
   set client.identity = req.http.Fastly-Client-IP;
 
+  if(req.url ~ "AccountsHandler") {
+    return(pass);
+  }
+
   #
   # Handle grace periods for where we will serve a stale response
   #     source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
@@ -55,7 +59,7 @@ sub vcl_recv {
 
   # Remove ALL cookies to the backend
   #   except the ones MediaWiki cares about
-  if(req.url ~ "(UserLogin|UserLogout)") {
+  if(req.url ~ "(UserLogin|UserLogout|AccountsHandler)") {
     # Do not tamper with MW cookies here
   } else {
     if (req.http.Cookie) {
