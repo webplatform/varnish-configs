@@ -1,15 +1,14 @@
-
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #40 (fork from 23, see also 27, 34, 35, 36, 38)
+# Service: docs, v #61 (fork from 23, see also 27, 34, 35, 36, 38, 41)
 #
 # Backend configs:
 #   - Max connections: 600
-#   - Error treshold: 5
-#   - Connection (ms): 60000
-#   - First byte (ms): 60000
-#   - Between bytes (ms): 30000
+#   - Error treshold: 3
+#   - Connection (ms): 21000
+#   - First byte (ms): 12000
+#   - Between bytes (ms): 12000
 #
 # Assuming it is using Varnish 2.1.5 syntax
 #
@@ -59,13 +58,13 @@ sub vcl_recv {
 
   # Remove ALL cookies to the backend
   #   except the ones MediaWiki cares about
-  if(req.url ~ "(UserLogin|UserLogout|AccountsHandler)") {
+  if(req.url ~ "(UserLogin|UserLogout)") {
     # Do not tamper with MW cookies here
   } else {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwiki2forceHTTPS|wpwikiforceHTTPS|wpwikiUserID|wpwiki2UserID|wpwiki_session|wpwiki2_session|wpwikiUserName|wpwiki2UserName|wpwikiToken|wpwiki2Token|wpwikiLoggedOut|wpwiki2LoggedOut|dismissSiteNotice|wptestwikiUserID|wptestwikiUserName|wptestwiki_session)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiforceHTTPS|wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|wpwiki2forceHTTPS|wpwiki2UserID|wpwiki2_session|wpwiki2UserName|wpwiki2Token|wpwiki2LoggedOut|wptestwikiforceHTTPS|wptestwikiUserID|wptestwiki_session|wptestwikiUserName|wptestwikiToken|wptestwikiLoggedOut|dismissSiteNotice)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
@@ -189,10 +188,9 @@ sub vcl_deliver {
 
   # Debug, Advise backend
   set resp.http.X-Backend-Key = req.backend;
-  set resp.http.X-Request-Url = req.url;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014050500";
+  set resp.http.X-Config-Serial = "2014090900";
 
   # The (!req.http.Fastly-FF) is to differentiate between
   #   edge to the sheild nodes. Shield nodes has a Fastly-FF
@@ -212,7 +210,3 @@ sub vcl_deliver {
   return(deliver);
   ## /Fastly BOILERPLATE =======
 }
-
-
-
-
