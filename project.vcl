@@ -1,14 +1,16 @@
+
+
 #
-# Fastly (Varnish) configuration for blog.webplatform.org
+# Fastly (Varnish) configuration for project.webplatform.org
 #
-# Service: blog, v #38 (see 30, 35, 37)
+# Service: project, v #17
 #
 # Backend configs:
-#   - Max connections: 700
+#   - Max connections: 500
 #   - Error treshold: 5
-#   - Connection (ms): 60000
-#   - First byte (ms): 60000
-#   - Between bytes (ms): 30000
+#   - Connection (ms): 3000
+#   - First byte (ms): 15000
+#   - Between bytes (ms): 10000
 #
 # Assuming it is using Varnish 2.1.5 syntax
 #
@@ -17,9 +19,10 @@
 #  - https://www.varnish-software.com/static/book/VCL_functions.html
 #  - http://docs.fastly.com/guides/22958207/27123847
 #  - http://docs.fastly.com/guides/22958207/23206371
-#  - http://blog.bigdinosaur.org/adventures-in-varnish/
 #  - https://www.varnish-cache.org/docs/2.1/tutorial/increasing_your_hitrate.html
+#  - https://fastly.zendesk.com/entries/23206371
 #
+
 
     # Doc: Called at the beginning of a request, after the complete request
     #      has been received and parsed. Its purpose is to
@@ -55,14 +58,14 @@ sub vcl_recv {
   }
 
   # Remove ALL cookies to the backend
-  #   except the ones WordPress cares about
-  if(req.url ~ "wp-(login|admin)" || req.url ~ "preview=true" || req.url ~ "xmlrpc.php") {
-    # Do not tamper with WordPress cookies here
+  #   except the ones MediaWiki cares about
+  if(req.url ~ "(UserLogin|UserLogout)") {
+    # Do not tamper with MW cookies here
   } else {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(wordpress_|wp-settings-)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(THEBUGGENIE|tbg4_username|tbg3_password)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
@@ -73,14 +76,13 @@ sub vcl_recv {
   }
 
   ## Fastly BOILERPLATE ========
-  #  # NOTE: To use vcl_miss in some desired cases, pass everything to lookup, not pass
-  #  #       ref: http://stackoverflow.com/questions/5110841/is-there-a-way-to-set-req-connection-timeout-for-specific-requests-in-varnish
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-      return(pass);
+    return(pass);
   }
-  return(lookup);  # Default outcome, keep at the end
-  ## /Fastly BOILERPLATE ========
+  return(lookup);
+  ## /Fastly BOILERPLATE =======
 }
+
 
 
     # Doc: Called after a document has been successfully retrieved from the backend
@@ -90,38 +92,9 @@ sub vcl_fetch {
   # Set the maximum grace period on an object
   set beresp.grace = 24h;
 
-  if ( (!(req.url ~ "(wp-(login|admin)|login)")) || (req.request == "GET") ) {
-    unset beresp.http.set-cookie;
-  }
-
   # Debug notes
   if(!beresp.http.X-Cache-Note) {
     set beresp.http.X-Cache-Note = "Debugging notes: ";
-  }
-
-  # Gzip
-  if (beresp.status == 200 && (beresp.http.content-type ~ "^(text/html|application/x-javascript|text/css|application/javascript|text/javascript)\s*($|;)" || req.url ~ "\.(js|css|html)($|\?)" ) ) {
-    # always set vary to make sure uncompressed versions dont always win
-    if (!beresp.http.Vary ~ "Accept-Encoding") {
-      if (beresp.http.Vary) {
-        set beresp.http.Vary = beresp.http.Vary ", Accept-Encoding";
-      } else {
-         set beresp.http.Vary = "Accept-Encoding";
-      }
-    }
-    if (req.http.Accept-Encoding == "gzip") {
-      set beresp.gzip = true;
-    }
-  }
-
-  # Enforce static asset Cache
-  if (
-    req.url ~ ".*\.(png|jpg|jpeg|gif|svg|css).*"
-  ) {
-      set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Forced static asset cache";
-      set beresp.ttl = 86400s;
-      set beresp.grace = 864000s;
-      return(deliver);
   }
 
   ## Fastly BOILERPLATE ========
@@ -132,37 +105,55 @@ sub vcl_fetch {
     set beresp.http.Fastly-Restarts = req.restarts;
   }
   if (beresp.http.Set-Cookie) {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has Set-Cookie";
     set req.http.Fastly-Cachetype = "SETCOOKIE";
     return (pass);
   }
   if (beresp.http.Cache-Control ~ "private") {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Cache-Control private";
     set req.http.Fastly-Cachetype = "PRIVATE";
     return (pass);
   }
   if (beresp.status == 500 || beresp.status == 503) {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Error document";
     set req.http.Fastly-Cachetype = "ERROR";
     set beresp.ttl = 1s;
     set beresp.grace = 5s;
     return (deliver);
   }
   if (beresp.http.Expires || beresp.http.Surrogate-Control ~ "max-age" || beresp.http.Cache-Control ~"(s-maxage|max-age)") {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has either max-age,Expires,Cache-control";
     # keep the ttl here
   } else {
     # apply the default ttl
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Had no max-age,expires,cache-control; setting default ttl";
     set beresp.ttl = 3600s;
   }
-  return(deliver); # Default outcome, keep at the end
+  return(deliver);
   ## /Fastly BOILERPLATE =======
 }
 
 
 
-    # Doc: Called before a cached object is delivered to the client
+    # Doc: Called after a cache lookup if the requested document was found in the cache.
+sub vcl_hit {
+#FASTLY hit
+
+  ## Fastly BOILERPLATE ========
+  if (!obj.cacheable) {
+    return(pass);
+  }
+  return(deliver);
+  ## /Fastly BOILERPLATE =======
+}
+
+
+
+sub vcl_miss {
+#FASTLY miss
+
+  ## Fastly BOILERPLATE ========
+  return(fetch);
+  ## /Fastly BOILERPLATE =======
+}
+
+
+
 sub vcl_deliver {
 #FASTLY deliver
 
@@ -195,8 +186,6 @@ sub vcl_deliver {
 
 
 
-
-
 sub vcl_error {
 #FASTLY error
 
@@ -208,4 +197,10 @@ sub vcl_error {
      return (deliver);
   }
 
+}
+
+
+
+sub vcl_pass {
+#FASTLY pass
 }
