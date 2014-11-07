@@ -3,7 +3,7 @@
 #
 # Fastly (Varnish) configuration for project.webplatform.org
 #
-# Service: project, v #17
+# Service: project, v #18
 #
 # Backend configs:
 #   - Max connections: 500
@@ -59,13 +59,13 @@ sub vcl_recv {
 
   # Remove ALL cookies to the backend
   #   except the ones MediaWiki cares about
-  if(req.url ~ "(UserLogin|UserLogout)") {
+  if(req.url ~ "login") {
     # Do not tamper with MW cookies here
   } else {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(THEBUGGENIE|tbg4_username|tbg3_password)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(THEBUGGENIE|tbg3_username|tbg4_username|tbg3_password|tbg4_password)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
