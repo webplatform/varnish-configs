@@ -1,7 +1,7 @@
 #
 # Fastly (Varnish) configuration for blog.webplatform.org
 #
-# Service: blog, v #38 (see 30, 35, 37)
+# Service: blog, v #53 (see 30, 35, 37, 38, 48)
 #
 # Backend configs:
 #   - Max connections: 700
@@ -30,8 +30,14 @@ sub vcl_recv {
 
   set client.identity = req.http.Fastly-Client-IP;
 
-  if (req.http.Fastly-SSL) {
-    error 802 "enforce-non-ssl";
+  # Force SSL
+  if (!req.http.Fastly-SSL) {
+     error 801 "Force SSL";
+  }
+
+  # Header overwrite XFF··
+  if (!req.http.X-Forwarded-For) {
+    set req.http.X-Forwarded-For = req.http.Fastly-Client-IP;
   }
 
   #
@@ -200,10 +206,11 @@ sub vcl_deliver {
 sub vcl_error {
 #FASTLY error
 
-  if (obj.status == 802) {
+  # Force SSL
+  if (obj.status == 801) {
      set obj.status = 301;
      set obj.response = "Moved Permanently";
-     set obj.http.Location = "http://" req.http.host req.url;
+     set obj.http.Location = "https://" req.http.host req.url;
      synthetic {""};
      return (deliver);
   }

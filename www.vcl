@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: www, v #16
+# Service: www, v #22 (16, 21)
 #
 # Backend configs:
 #   - Max connections: 600
@@ -33,6 +33,16 @@ sub vcl_recv {
 
   # No need for cookie, at all!
   remove req.http.Cookie;
+
+  # Force SSL
+  if (!req.http.Fastly-SSL) {
+     error 801 "Force SSL";
+  }
+
+  # Header overwrite XFF··
+  if (!req.http.X-Forwarded-For) {
+    set req.http.X-Forwarded-For = req.http.Fastly-Client-IP;
+  }
 
   #
   # Handle grace periods for where we will serve a stale response
@@ -168,7 +178,7 @@ sub vcl_deliver {
   set resp.http.X-Backend-Key = req.backend;
 
   # Debug, change version string
-  set resp.http.X-Config-Serial = "2014040700";
+  set resp.http.X-Config-Serial = "2015031100";
 
   if (!req.http.Fastly-Debug) {
       remove resp.http.X-Cache-Note;
@@ -184,4 +194,18 @@ sub vcl_deliver {
   ## Fastly BOILERPLATE ========
   return(deliver);
   ## /Fastly BOILERPLATE =======
+}
+
+sub vcl_error {
+#FASTLY error
+
+  # Force SSL
+  if (obj.status == 801) {
+     set obj.status = 301;
+     set obj.response = "Moved Permanently";
+     set obj.http.Location = "https://" req.http.host req.url;
+     synthetic {""};
+     return (deliver);
+  }
+
 }

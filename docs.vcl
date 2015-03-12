@@ -1,13 +1,13 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #61 (fork from 23, see also 27, 34, 35, 36, 38, 41)
+# Service: docs, v #78 (fork from 77)
 #
 # Backend configs:
 #   - Max connections: 600
-#   - Error treshold: 3
-#   - Connection (ms): 21000
-#   - First byte (ms): 12000
+#   - Error treshold: 5
+#   - Connection (ms): 25000
+#   - First byte (ms): 22000
 #   - Between bytes (ms): 12000
 #
 # Assuming it is using Varnish 2.1.5 syntax
@@ -30,41 +30,40 @@
 sub vcl_recv {
 #FASTLY recv
 
-  set client.identity = req.http.Fastly-Client-IP;
-
-  if(req.url ~ "AccountsHandler") {
-    return(pass);
+  # If debugging header, please send to only one backend
+  if(req.http.Fastly-Debug) {
+    set req.backend = F_first;
   }
 
-  #
+  # Force SSL
+  if (!req.http.Fastly-SSL) {
+     error 801 "Force SSL";
+  }
+
+  # Header overwrite XFF
+  if (!req.http.X-Forwarded-For) {
+    set req.http.X-Forwarded-For = req.http.Fastly-Client-IP;
+  }
+
   # Handle grace periods for where we will serve a stale response
-  #     source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
+  # ref: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
   if (!req.backend.healthy) {
       # The backend is unhealthy which means we want to serve the stale
       #   response long enough (hopefully) for us to fix the problem.
       set req.grace = 24h;
-
-      # The backend is unhealthy which means we want to serve responses as
-      #   if the user was not logged in. This means they will be eligible
-      #   for the cached pages.
       remove req.http.Authenticate;
       remove req.http.Authorization;
       remove req.http.Cookie;
   }
-  else {
-      # Avoid a request pileup by serving stale content if required.
-      set req.grace = 15s;
-  }
 
-  # Remove ALL cookies to the backend
-  #   except the ones MediaWiki cares about
+  # Remove ALL cookies to the backend except the ones MediaWiki uses
   if(req.url ~ "(UserLogin|UserLogout)") {
     # Do not tamper with MW cookies here
   } else {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
       set req.http.Cookie = regsuball(req.http.Cookie, "; +", ";");
-      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiforceHTTPS|wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|wpwiki2forceHTTPS|wpwiki2UserID|wpwiki2_session|wpwiki2UserName|wpwiki2Token|wpwiki2LoggedOut|wptestwikiforceHTTPS|wptestwikiUserID|wptestwiki_session|wptestwikiUserName|wptestwikiToken|wptestwikiLoggedOut|dismissSiteNotice)=", "; \1=");
+      set req.http.Cookie = regsuball(req.http.Cookie, ";(wpwikiUserID|wpwiki_session|wpwikiUserName|wpwikiToken|wpwikiLoggedOut|wptestwikiforceHTTPS|wptestwikiUserID|wptestwiki_session|wptestwikiUserName|wptestwikiToken|wptestwikiLoggedOut)=", "; \1=");
       set req.http.Cookie = regsuball(req.http.Cookie, ";[^ ][^;]*", "");
       set req.http.Cookie = regsuball(req.http.Cookie, "^[; ]+|[; ]+$", "");
 
@@ -76,6 +75,10 @@ sub vcl_recv {
 
   # normalize Accept-Encoding to reduce vary
   if (req.http.Accept-Encoding) {
+    if (req.url ~ "\.(jpg|png|gif|gz|tgz|bz2|tbz|mp3|ogg)$") {
+      # No point in compressing these
+      remove req.http.Accept-Encoding;
+    }
     if (req.http.User-Agent ~ "MSIE 6") {
       unset req.http.Accept-Encoding;
     } elsif (req.http.Accept-Encoding ~ "gzip") {
@@ -89,10 +92,10 @@ sub vcl_recv {
 
   ## Fastly BOILERPLATE ========
   if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
-      return(pass);
+    return(pass);
   }
-  return(lookup);  # Default outcome, keep at the end
-  ## /Fastly BOILERPLATE ========
+  return(lookup);
+  ## /Fastly BOILERPLATE =======
 }
 
 
@@ -130,10 +133,10 @@ sub vcl_fetch {
 
   # Enforce static asset Cache
   if (
-    req.url ~ "^/[t|w|u]/load\.php.*?\bonly=\b[styles|scripts].*" ||
+    req.url ~ "^/[t|w]/load\.php.*?\bonly=\b[styles|scripts].*" ||
     beresp.http.content-type ~ "^(text/css|image|application/javascript|text/javascript)\s*($|;)"
   ) {
-      set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Forced static asset cache";
+      set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Forced static asset cache. ";
       set beresp.ttl = 86400s;
       set beresp.grace = 864000s;
       return(deliver);
@@ -147,28 +150,28 @@ sub vcl_fetch {
     set beresp.http.Fastly-Restarts = req.restarts;
   }
   if (beresp.http.Set-Cookie) {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has Set-Cookie";
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Has Set-Cookie. ";
     set req.http.Fastly-Cachetype = "SETCOOKIE";
     return (pass);
   }
   if (beresp.http.Cache-Control ~ "private") {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Cache-Control private";
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Cache-Control private. ";
     set req.http.Fastly-Cachetype = "PRIVATE";
     return (pass);
   }
   if (beresp.status == 500 || beresp.status == 503) {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Error document";
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Error document. ";
     set req.http.Fastly-Cachetype = "ERROR";
     set beresp.ttl = 1s;
     set beresp.grace = 5s;
     return (deliver);
   }
   if (beresp.http.Expires || beresp.http.Surrogate-Control ~ "max-age" || beresp.http.Cache-Control ~"(s-maxage|max-age)") {
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Has either max-age,Expires,Cache-control";
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Has either max-age,Expires,Cache-control. ";
     # keep the ttl here
   } else {
     # apply the default ttl
-    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note ", Had no max-age,expires,cache-control; setting default ttl";
+    set beresp.http.X-Cache-Note = beresp.http.X-Cache-Note "Had no max-age,expires,cache-control; setting default TTL. ";
     set beresp.ttl = 3600s;
   }
   return(deliver); # Default outcome, keep at the end
@@ -189,9 +192,6 @@ sub vcl_deliver {
   # Debug, Advise backend
   set resp.http.X-Backend-Key = req.backend;
 
-  # Debug, change version string
-  set resp.http.X-Config-Serial = "2014090900";
-
   # The (!req.http.Fastly-FF) is to differentiate between
   #   edge to the sheild nodes. Shield nodes has a Fastly-FF
   #   header added internally.
@@ -209,4 +209,18 @@ sub vcl_deliver {
   ## Fastly BOILERPLATE ========
   return(deliver);
   ## /Fastly BOILERPLATE =======
+}
+
+
+sub vcl_error {
+#FASTLY error
+
+  # Force SSL
+  if (obj.status == 801) {
+     set obj.status = 301;
+     set obj.response = "Moved Permanently";
+     set obj.http.Location = "https://" req.http.host req.url;
+     synthetic {""};
+     return (deliver);
+  }
 }
