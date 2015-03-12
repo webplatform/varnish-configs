@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: www, v #23 (16, 21)
+# Service: www, v #24 (16, 21)
 #
 # Backend configs:
 #   - Max connections: 600
@@ -34,7 +34,7 @@ sub vcl_recv {
   # No need for cookie, at all!
   remove req.http.Cookie;
 
-  # Header overwrite XFF··
+  # Header overwrite XFF
   if (!req.http.X-Forwarded-For) {
     set req.http.X-Forwarded-For = req.http.Fastly-Client-IP;
   }
