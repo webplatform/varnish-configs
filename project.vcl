@@ -3,7 +3,7 @@
 #
 # Fastly (Varnish) configuration for project.webplatform.org
 #
-# Service: project, v #18
+# Service: project, v 28 (18)
 #
 # Backend configs:
 #   - Max connections: 500
@@ -33,10 +33,6 @@ sub vcl_recv {
 
   set client.identity = req.http.Fastly-Client-IP;
 
-  if (req.http.Fastly-SSL) {
-    error 802 "enforce-non-ssl";
-  }
-
   #
   # Handle grace periods for where we will serve a stale response
   #     source: https://github.com/python/psf-fastly/blob/master/vcl/pypi.vcl
@@ -60,7 +56,7 @@ sub vcl_recv {
   # Remove ALL cookies to the backend
   #   except the ones MediaWiki cares about
   if(req.url ~ "login") {
-    # Do not tamper with MW cookies here
+    # Do not tamper cookies
   } else {
     if (req.http.Cookie) {
       set req.http.Cookie = ";" req.http.Cookie;
@@ -128,42 +124,13 @@ sub vcl_fetch {
   ## /Fastly BOILERPLATE =======
 }
 
-
-
-    # Doc: Called after a cache lookup if the requested document was found in the cache.
-sub vcl_hit {
-#FASTLY hit
-
-  ## Fastly BOILERPLATE ========
-  if (!obj.cacheable) {
-    return(pass);
-  }
-  return(deliver);
-  ## /Fastly BOILERPLATE =======
-}
-
-
-
-sub vcl_miss {
-#FASTLY miss
-
-  ## Fastly BOILERPLATE ========
-  return(fetch);
-  ## /Fastly BOILERPLATE =======
-}
-
-
-
 sub vcl_deliver {
 #FASTLY deliver
 
   # Always send this instead of using meta tags in markup
-  if (resp.http.Content-Type ~ "html") {
+  if ( resp.http.Content-Type ~ "html" ) {
     set resp.http.X-UA-Compatible = "IE=edge,chrome=1";
   }
-
-  # Debug, change version string
-  set resp.http.X-Config-Serial = "2014102600";
 
   # The (!req.http.Fastly-FF) is to differentiate between
   #   edge to the sheild nodes. Shield nodes has a Fastly-FF
@@ -182,25 +149,4 @@ sub vcl_deliver {
   ## Fastly BOILERPLATE ========
   return(deliver);
   ## /Fastly BOILERPLATE =======
-}
-
-
-
-sub vcl_error {
-#FASTLY error
-
-  if (obj.status == 802) {
-     set obj.status = 301;
-     set obj.response = "Moved Permanently";
-     set obj.http.Location = "http://" req.http.host req.url;
-     synthetic {""};
-     return (deliver);
-  }
-
-}
-
-
-
-sub vcl_pass {
-#FASTLY pass
 }

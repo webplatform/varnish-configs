@@ -1,7 +1,7 @@
 #
 # Fastly (Varnish) configuration for docs.webplatform.org
 #
-# Service: docs, v #78 (fork from 77)
+# Service: docs, v #82 (fork from 77,81)
 #
 # Backend configs:
 #   - Max connections: 600
