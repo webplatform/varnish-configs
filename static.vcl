@@ -43,6 +43,13 @@ sub vcl_recv {
                               "/swift/v1\1");
     }
 
+    # Varnish doesn't like url containing
+    # double slashes
+    if(req.url ~ "^(.*)//(.*)$")
+    {
+      set req.url = regsub(req.url,"^(.*)//(.*)$","\1/\2");
+    }
+
     # normalize Accept-Encoding to reduce vary
     if (req.http.Accept-Encoding) {
       if (req.http.User-Agent ~ "MSIE 6") {
@@ -68,7 +75,7 @@ sub vcl_recv {
     # /As suggested...
 
   ## Fastly BOILERPLATE ========
-  if (req.request != "HEAD" && req.request != "GET" && req.request != "PURGE") {
+  if (req.request != "HEAD" && req.request != "GET" && req.request != "FASTLYPURGE") {
     return(pass);
   }
   return(lookup);
@@ -128,47 +135,3 @@ sub vcl_fetch {
   return(deliver);
 }
 
-sub vcl_hit {
-#FASTLY hit
-
-  ## Fastly BOILERPLATE ========
-  if (!obj.cacheable) {
-    return(pass);
-  }
-  return(deliver);
-  ## /Fastly BOILERPLATE =======
-
-}
-
-sub vcl_miss {
-#FASTLY miss
-
-  ## Fastly BOILERPLATE ========
-  return(fetch);
-  ## /Fastly BOILERPLATE =======
-}
-
-sub vcl_deliver {
-#FASTLY deliver
-
-  # Debug, Advise backend
-  set resp.http.X-Backend-Key = req.backend;
-
-  # Debug, what URL was requested
-  set resp.http.X-Request-Url = req.url;
-
-  # Debug, change version string
-  set resp.http.X-Config-Serial = "2014012300";
-
-  ## Fastly BOILERPLATE ========
-  return(deliver);
-  ## /Fastly BOILERPLATE =======
-}
-
-sub vcl_error {
-#FASTLY error
-}
-
-sub vcl_pass {
-#FASTLY pass
-}
