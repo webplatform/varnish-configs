@@ -2,7 +2,7 @@
 #
 # Fastly (Varnish) VCL configuration for docs.webplatform.org
 #
-# Service: docs, v105 (fork from 77,81,82,96,97,103,104)
+# Service: docs, v106 (fork from 77,81,82,96,97,103,104)
 #
 # Backend Hosts:
 #   - Max connections:       700
@@ -90,13 +90,6 @@ sub vcl_fetch {
   if (beresp.http.Vary ~ "Cookie" && beresp.http.Vary ~ "Accept-Encoding") {
     set beresp.http.X-Cache-Debug = beresp.http.X-Cache-Debug "Had Vary with cookie, overwrote to Accept-Encoding alone.  ";
     set beresp.http.Vary = "Accept-Encoding";
-  }
-
-  # If the request doesn’t contain a session cookie, drop MediaWiki Expires headers
-  # as it breaks valid opportunities to serve cached content
-  if (req.http.Cookie !~ "_session=") {
-    set beresp.http.X-Cache-Debug = beresp.http.X-Cache-Debug "Had session cookie, remove Expires.  ";
-    unset beresp.http.Expires;
   }
 
   if (beresp.http.Vary) {
